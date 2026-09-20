@@ -5,7 +5,7 @@
 
 `default_nettype none
  
-module tt_um_jet_seq8B (
+module tt_um_jet_seq8b (
     input  wire [7:0] ui_in,    // dedicated inputs
     output wire [7:0] uo_out,   // dedicated outputs
     input  wire [7:0] uio_in,   // bidirectional: input path (unused)
