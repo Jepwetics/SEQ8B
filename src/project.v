@@ -16,8 +16,6 @@
 `default_nettype none
 
 module tt_um_jet_seq8b (
-    input  wire       VPWR,
-    input  wire       VGND,
     input  wire [7:0] ui_in,    // dedicated inputs
     output wire [7:0] uo_out,   // dedicated outputs
     input  wire [7:0] uio_in,   // bidirectional: input path (unused)
@@ -208,6 +206,6 @@ module tt_um_jet_seq8b (
   assign uio_oe  = 8'h00;  // bidirectional pins are not used
 
   // Tie off unused inputs so the linter stays quiet
-  wire _unused = &{ena, uio_in, VPWR, VGND, 1'b0};
+  wire _unused = &{ena, uio_in, 1'b0};
 
 endmodule
