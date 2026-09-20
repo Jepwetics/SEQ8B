@@ -3,26 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/*
+ * SEQ8 - a tiny programmable output sequencer
+ *
+ * An 8-instruction programmable state machine. You shift a program in
+ * over a simple SPI-like port, raise RUN, and it drives the 8 output
+ * pins according to that program.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 `default_nettype none
- 
+
 module tt_um_jet_seq8b (
+    input  wire       VPWR,
+    input  wire       VGND,
     input  wire [7:0] ui_in,    // dedicated inputs
     output wire [7:0] uo_out,   // dedicated outputs
     input  wire [7:0] uio_in,   // bidirectional: input path (unused)
-    output wire [7:0] uio_out,  // bidirectional: output path (unused)
+    output wire [7:0] uio_out,  // bidirectional: output path
     output wire [7:0] uio_oe,   // bidirectional: 1 = drive as output
     input  wire       ena,      // always 1 when the design is selected
     input  wire       clk,      // clock
     input  wire       rst_n     // reset, active low
 );
- 
+
   // --------------------------------------------------------------------
   // Input synchronisers.
   // ui_in comes from the outside world and can change at any moment, so
   // every input passes through two flip-flops before it is used.
   // --------------------------------------------------------------------
   reg [7:0] sync0, sync1;
- 
+
   always @(posedge clk) begin
     if (!rst_n) begin
       sync0 <= 8'b0000_0100;  // CS_N idles high
@@ -32,7 +44,7 @@ module tt_um_jet_seq8b (
       sync1 <= sync0;
     end
   end
- 
+
   wire       sck    = sync1[0];    // program load clock
   wire       mosi   = sync1[1];    // program load data
   wire       csn    = sync1[2];    // program load select, active low
@@ -40,7 +52,7 @@ module tt_um_jet_seq8b (
   wire       in0    = sync1[4];    // branch input 0
   wire       in1    = sync1[5];    // branch input 1
   wire [1:0] ps_sel = sync1[7:6];  // tick speed select
- 
+
   // Edge detectors for the loader
   reg sck_d, csn_d;
   always @(posedge clk) begin
@@ -52,10 +64,10 @@ module tt_um_jet_seq8b (
       csn_d <= csn;
     end
   end
- 
+
   wire sck_rise = sck & ~sck_d;
   wire csn_fall = ~csn & csn_d;
- 
+
   // --------------------------------------------------------------------
   // Program memory and the loader.
   //
@@ -68,10 +80,10 @@ module tt_um_jet_seq8b (
   reg [8:0] shreg;    // the 9 bits shifted in so far; the 10th is MOSI
   reg [3:0] bitcnt;
   reg [2:0] ldaddr;
- 
+
   wire [9:0] shreg_next = {shreg, mosi};
   wire       word_done  = (bitcnt == 4'd9);
- 
+
   always @(posedge clk) begin
     if (!rst_n) begin
       shreg  <= 9'd0;
@@ -92,7 +104,7 @@ module tt_um_jet_seq8b (
       end
     end
   end
- 
+
   // --------------------------------------------------------------------
   // Tick generator.
   //
@@ -101,21 +113,21 @@ module tt_um_jet_seq8b (
   // zero while RUN is low so timing always starts from the same point.
   // --------------------------------------------------------------------
   reg [11:0] ps_cnt;
- 
+
   wire t0 = &ps_cnt[3:0];
   wire t1 = &ps_cnt[7:4];
   wire t2 = &ps_cnt[11:8];
- 
+
   wire tick = (ps_sel == 2'd0)
             | ((ps_sel == 2'd1) & t0)
             | ((ps_sel == 2'd2) & t0 & t1)
             | ((ps_sel == 2'd3) & t0 & t1 & t2);
- 
+
   always @(posedge clk) begin
     if (!rst_n || !run) ps_cnt <= 12'd0;
     else                ps_cnt <= ps_cnt + 12'd1;
   end
- 
+
   // --------------------------------------------------------------------
   // The core.
   //
@@ -133,27 +145,27 @@ module tt_um_jet_seq8b (
   localparam OP_WAIT = 2'd1;
   localparam OP_JMP  = 2'd2;
   localparam OP_NOP  = 2'd3;
- 
+
   localparam C_ALWAYS = 2'd0;
   localparam C_IN0    = 2'd1;
   localparam C_IN1    = 2'd2;
   localparam C_HALT   = 2'd3;
- 
+
   reg [2:0] pc;
   reg [7:0] wait_cnt;
   reg [7:0] outl;
   reg       waiting;
   reg       halted;
- 
+
   wire [9:0] ir   = pmem[pc];
   wire [1:0] op   = ir[9:8];
   wire [7:0] imm  = ir[7:0];
   wire [1:0] cond = imm[7:6];
- 
+
   wire take = (cond == C_ALWAYS)
             | ((cond == C_IN0) & in0)
             | ((cond == C_IN1) & in1);
- 
+
   always @(posedge clk) begin
     if (!rst_n || !run) begin
       // RUN low holds the core in reset. Load your program while RUN is
@@ -187,15 +199,15 @@ module tt_um_jet_seq8b (
       endcase
     end
   end
- 
+
   // --------------------------------------------------------------------
   // Outputs
   // --------------------------------------------------------------------
   assign uo_out  = outl;
   assign uio_out = 8'h00;
   assign uio_oe  = 8'h00;  // bidirectional pins are not used
- 
+
   // Tie off unused inputs so the linter stays quiet
-  wire _unused = &{ena, uio_in, 1'b0};
- 
+  wire _unused = &{ena, uio_in, VPWR, VGND, 1'b0};
+
 endmodule
